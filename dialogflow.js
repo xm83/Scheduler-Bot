@@ -1,8 +1,7 @@
-// You can find your project ID in your Dialogflow agent settings
-const projectId = PROCESS.ENV.DIALOGFLOW_PROJECT_ID; //https://dialogflow.com/docs/agents#settings
+//You can find your project ID in your Dialogflow agent settings
+const projectId = process.env.DIALOGFLOW_PROJECT_ID; //https://dialogflow.com/docs/agents#settings
 const sessionId = 'quickstart-session-id';
-const query = 'hello';
-const languageCode = 'en-US';
+const query = 'schedule a meeting with Sally tonight';
 
 // Instantiate a DialogFlow client.
 const dialogflow = require('dialogflow');
@@ -17,7 +16,7 @@ const request = {
   queryInput: {
     text: {
       text: query,
-      languageCode: languageCode,
+      languageCode: 'en-US',
     },
   },
 };
