@@ -19,8 +19,8 @@ rtm.start();
 
 rtm.on('message', event=> {
   let message = event.text;
-  console.log(message);
   let channel = event.channel;
+  console.log(message, channel);
   let responseMessage = 'sample response from backend';
   const projectId = process.env.DIALOGFLOW_PROJECT_ID; //https://dialogflow.com/docs/agents#settings
   const sessionId = 'quickstart-session-id';
