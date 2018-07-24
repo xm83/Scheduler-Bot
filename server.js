@@ -67,4 +67,8 @@ app.post('/test', function(req, res){
   // res.send(req.body.data.challenge);
 })
 
+app.get('/', (req,res)=>{
+  res.send('here');
+})
+
 app.listen(8888);
