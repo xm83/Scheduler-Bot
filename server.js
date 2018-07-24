@@ -19,8 +19,8 @@ rtm.start();
 
 rtm.on('message', event=> {
   let message = event.text;
-  console.log(message);
   let channel = event.channel;
+  console.log(message, channel);
   let responseMessage = 'sample response from backend';
   const projectId = process.env.DIALOGFLOW_PROJECT_ID; //https://dialogflow.com/docs/agents#settings
   const sessionId = 'quickstart-session-id';
@@ -65,6 +65,10 @@ app.post('/test', function(req, res){
   // console.log(req);
   res.send(req.body.challenge);
   // res.send(req.body.data.challenge);
+})
+
+app.get('/', (req,res)=>{
+  res.send('here');
 })
 
 app.listen(8888);
