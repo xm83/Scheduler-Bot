@@ -4,6 +4,7 @@ const token = process.env.BOT_USER_OAUTH_ACCESS_TOKEN;
 let axios = require('axios');
 const express = require('express');
 const bodyParser = require('body-parser');
+const dialogflow = require('dialogflow');
 
 // models
 const User = require('./models').User;
@@ -26,28 +27,51 @@ const oauth2Client = new google.auth.OAuth2(
 );
 
 
-let app = express();
 
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 
-const rtm = new RTMClient(process.env.TOKEN);
+const rtm = new RTMClient(token);
 rtm.start();
 
 rtm.on('message', event=> {
   let message = event.text;
   let channel = event.channel;
-  if (channel === scheduleBotChannel){
-    let responseMessage = 'sample response from backend';
-    rtm.sendMessage(responseMessage, scheduleBotChannel)
-    .then(msg =>
-      console.log('message sent:' + msg)
-    ).catch(err=> console.log("error", err));
-  }
+  console.log(message, channel);
+  let responseMessage = 'sample response from backend';
+  const projectId = process.env.DIALOGFLOW_PROJECT_ID; //https://dialogflow.com/docs/agents#settings
+  const sessionId = 'quickstart-session-id';
+  const sessionClient = new dialogflow.SessionsClient();
+  const sessionPath = sessionClient.sessionPath(projectId, sessionId);
+  const request = {
+    session: sessionPath,
+    queryInput: {
+      text: {
+        text: message,
+        languageCode: 'en-US',
+      },
+    },
+  };
 
-
-
+  sessionClient
+    .detectIntent(request)
+    .then(responses => {
+      console.log('Detected intent');
+      const result = responses[0].queryResult;
+      console.log(`  Query: ${result.queryText}`);
+      console.log(`  Response: ${result.fulfillmentText}`);
+      console.log(result.parameters);
+      rtm.sendMessage(result.fulfillmentText, channel)
+      if (result.intent) {
+        console.log(`  Intent: ${result.intent.displayName}`);
+      } else {
+        console.log(`  No intent matched.`);
+      }
+    })
+  .then(msg =>
+    console.log('message sent:' + msg)
+  ).catch(err=> console.log("error", err));
 
 })
 
