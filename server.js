@@ -13,19 +13,7 @@ const scheduleBotChannel = 'DBWNA5TCN';
 
 // google api setup
 const {google} = require('googleapis');
-
-const scopes = [
-  'https://www.googleapis.com/auth/plus.me',
-  'https://www.googleapis.com/auth/calendar'
-];
-
-// new client
-const oauth2Client = new google.auth.OAuth2(
-  process.env.GOOGLE_CLIENT_ID,
-  process.env.GOOGLE_CLIENT_SECRET,
-  process.env.DOMAIN + '/google/callback'
-);
-
+const {oauthClient2} = require('./cal');
 
 
 
@@ -81,7 +69,7 @@ app.get('/google/calendar', function(req, res) {
     // create a new user in database based on auth_id
     var newUser = new User({auth_id});
     newUser.save()
-    .then(() => ( 
+    .then(() => {
       // generate a url that asks permissions for Google+ and Google Calendar scopes
       var url = oauth2Client.generateAuthUrl({
         // 'online' (default) or 'offline' (gets refresh_token)
@@ -94,15 +82,11 @@ app.get('/google/calendar', function(req, res) {
         })),
         prompt: 'consent'
       });
-
       res.redirect(url);
-    ))
+    })
     .catch((err) => {
       res.send("error", err);
     })
-
-    
-
 })
 
 // GET route that handles oauth callback for google api
@@ -130,34 +114,6 @@ app.get('/google/callback', function(req, res) {
 
 })
 
-
-const calendar = google.calendar({
-  version: 'v3',
-  auth: oauth2Client
-})
-
-calendar.events.list({
-  calendarId: 'primary',
-  timeMin:(new Date()).toISOString(),
-  maxResults: 10,
-  singleEvents: true,
-  orderBy: 'startTime'
-}, (err, resp) => {
-  console.log(resp);
-})
-
-calendar.event.insert({
-  calendarId: 'primary',
-  summary: 'eat fish',
-  start: {
-    date: new Date(Date.now() + 30000) // 30 seconds from now
-  },
-  end: {
-    date: new Date(Date.now() + 90000)
-  }
-}, (err, resp) => {
-  console.log(resp);
-})
 
 app.post('/test', function(req, res){
   console.log('something');
