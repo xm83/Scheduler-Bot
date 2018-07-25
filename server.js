@@ -1,13 +1,15 @@
+const routingUrl = 'https://localhost:1337'
 const { RTMClient, WebClient } = require('@slack/client')
 const teamId = 'sjs-2018'
 const token = process.env.BOT_USER_OAUTH_ACCESS_TOKEN
-let axios = require('axios')
+let axios = require('axios');
 const express = require('express')
 const app = express()
 const bodyParser = require('body-parser')
 const dialogflow = require('dialogflow')
+const port = 1337;
+const BOT_ID = "UBV5QQP6G"
 
-let app = express();
 // models
 const User = require('./models').User
 
@@ -16,6 +18,7 @@ const scheduleBotChannel = 'DBWNA5TCN'
 // gCal api setup
 const {google} = require('googleapis')
 const {scopes, makeCalendarAPICall} = require('./cal')
+
 // TODO: how to create a new unique google profile for every new user???
 const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID,
@@ -23,65 +26,78 @@ const oauth2Client = new google.auth.OAuth2(
   process.env.DOMAIN + '/google/callback'
 );
 
-
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 
+// dialogflow session setup
+const projectId = process.env.DIALOGFLOW_PROJECT_ID; //https://dialogflow.com/docs/agents#settings
+const sessionId = 'quickstart-session-id';
+const sessionClient = new dialogflow.SessionsClient();
+const sessionPath = sessionClient.sessionPath(projectId, sessionId);
+
+//rtm slack message received
 const rtm = new RTMClient(token);
 rtm.start();
 
 rtm.on('message', event=> {
-  const user = event.user;
-  let message = event.text;
-  let channel = event.channel;
-  console.log(message, channel, user);
-  const projectId = process.env.DIALOGFLOW_PROJECT_ID; //https://dialogflow.com/docs/agents#settings
-  const sessionId = 'quickstart-session-id';
-  const sessionClient = new dialogflow.SessionsClient();
-  const sessionPath = sessionClient.sessionPath(projectId, sessionId);
-  const request = {
-    session: sessionPath,
-    queryInput: {
-      text: {
-        text: message,
-        languageCode: 'en-US'
-      }
-    }
-  }
 
-  if (user !== "UBV5QQP6G"){
-    sessionClient
-      .detectIntent(request)
-      .then(responses => {
-        console.log('Detected intent');
-        const result = responses[0].queryResult;
-        console.log(`  Query: ${result.queryText}`);
-        console.log(`  Response: ${result.fulfillmentText}`);
-        // console.log(result.parameters);
-        // rtm.sendMessage(result.fulfillmentText , channel)
-        // console.log(result);
-        if (result.intent) {
-          console.log(`  Intent: ${result.intent.displayName}`);
-        } else {
-          console.log(`  No intent matched.`);
+  console.log(event);
+
+  const slackId = event.user;
+  User.findOne({slackId: slackId})
+  .then(user=> {
+    if (!user || !user.access_token){
+      //send link to user so that they can authenticate
+      rtm.sendMessage(routingUrl + '/google/calendar?slackId=' + slackId, event.channel);
+      //send this link to the user
+    }else{
+      // dialog flow stuff here
+
+      // user already exists: send query to Api.ai
+        const request = {
+          session: sessionPath,
+          queryInput: {
+            text: {
+              text: message,
+              languageCode: 'en-US'
+            }
+          }
         }
-      })
-    .then(msg =>
-      console.log('message sent')
-    ).catch(err=> console.log("error", err));
-  }
+        sessionClient
+          .detectIntent(request)
+          .then(responses => {
+            console.log('Detected intent');
+            const result = responses[0].queryResult;
+            console.log(`  Query: ${result.queryText}`);
+            console.log(`  Response: ${result.fulfillmentText}`);
+            rtm.sendMessage(result.fulfillmentText , channel)
+            if (result.intent) {
+              console.log(`  Intent: ${result.intent.displayName}`);
+            } else {
+              console.log(`  No intent matched.`);
+            }
+          }).then(msg => console.log('message sent')
+        )
+    }
+  })
+
 })
 
+//webhook post route for dialogflow query responses
 app.post('/webhook', function(req, res){
   if (req.body.queryResult.allRequiredParamsPresent){
     res.json(req.body);
   }
-  
-// GET route that redirects to google oatuh2 url
+})
+
+/* GOOGLE API ROUTES */
+// GET route that redirects to google oauth2 url
 app.get('/google/calendar', function (req, res) {
+  console.log('get google calendar route')
   // TODO: get slackId, task, and action from slack
   let slackId = req.query.slackId || 'myslackId'
-
+  let message = req.query.message;
+  let channel = req.query.channel;
   // save action into database?
 
   // check if user exists
@@ -90,7 +106,7 @@ app.get('/google/calendar', function (req, res) {
   })
     .exec()
     .then((user) => {
-      if (!user) {
+      if (!user && user !== BOT_ID) {
       // create a new user in database
         var newUser = new User({
           slackId: slackId
@@ -111,19 +127,22 @@ app.get('/google/calendar', function (req, res) {
             res.redirect(url)
           })
           .catch((err) => {
-            console.log('errorrrr', err)
+            console.log('error', err)
             res.status(500).send('internal error')
           })
       } else {
-        // user already exists: send query to Api.ai
-        // TODO
-      }
-    })
-    .catch((err) => {
-      console.log('error finding user', err)
-      res.status(500).send('internal server error')
-    })
+
+        } //end else
+      }) //end then
+      .catch(err => {
+        console.log('error finding user', err);
+        res.status(500).send('internal server error');
+      })
 })
+    // .catch((err) => {
+    //   console.log('error finding user', err)
+    //   res.status(500).send('internal server error')
+    // })
 
 // GET route that handles oauth callback for google api
 app.get('/google/callback', function (req, res) {
@@ -147,7 +166,7 @@ app.get('/google/callback', function (req, res) {
           user.access_token = tokens.access_token
           user.refresh_token = tokens.refresh_token
           user.save()
-          
+
           // once you get the token, make API call
           makeCalendarAPICall(tokens);
           res.status(200).send('success')
@@ -157,7 +176,7 @@ app.get('/google/callback', function (req, res) {
         console.log('errorrrr', err)
         res.status(500).send('internal error')
       })
+    })
   })
-})
 
-app.listen(1337);
+app.listen(port || process.env.PORT);
