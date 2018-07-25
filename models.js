@@ -36,7 +36,10 @@ const taskSchema = Schema({
   },
   status: String, // pending or scheduled
   gCalEventId: String,
-  requesterId: String
+  requesterId: {
+    type: Schema.Types.ObjectId, 
+    ref: 'User'
+  }
 });
 
 const meetingSchema = Schema({
@@ -61,7 +64,10 @@ const meetingSchema = Schema({
     type: Date,
     default: '',
   },
-  requesterId: String,
+  requesterId: {
+    type: Schema.Types.ObjectId, 
+    ref: 'User'
+  },
   // google calendar fields
 });
 
