@@ -1,4 +1,3 @@
-const routingUrl = 'https://localhost:1337'
 const { RTMClient, WebClient } = require('@slack/client')
 const teamId = 'sjs-2018'
 const token = process.env.BOT_USER_OAUTH_ACCESS_TOKEN
@@ -7,47 +6,25 @@ const express = require('express')
 const app = express()
 const bodyParser = require('body-parser')
 const dialogflow = require('dialogflow')
-<<<<<<< HEAD
-const port = 1337;
-const BOT_ID = "UBV5QQP6G"
-=======
 const routingUrl = 'https://2d0f7e15.ngrok.io'
+const slackTeam = 'sjs-2018'
 const port = 1337
->>>>>>> 6f9f5d724410b584cf4ceaaa2e4ea0afa7474b2d
 
+const BOT_ID = "UBV5QQP6G";
 // models
 const User = require('./models').User
 
 const scheduleBotChannel = 'DBWNA5TCN'
+const web = new WebClient(token);
 
 // gCal api setup
 const {google} = require('googleapis')
 const {scopes, makeCalendarAPICall} = require('./cal')
 
-<<<<<<< HEAD
-// TODO: how to create a new unique google profile for every new user???
-=======
->>>>>>> 6f9f5d724410b584cf4ceaaa2e4ea0afa7474b2d
 const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID,
   process.env.GOOGLE_CLIENT_SECRET,
   process.env.DOMAIN + '/google/callback'
-<<<<<<< HEAD
-);
-
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: false }));
-
-// dialogflow session setup
-const projectId = process.env.DIALOGFLOW_PROJECT_ID; //https://dialogflow.com/docs/agents#settings
-const sessionId = 'quickstart-session-id';
-const sessionClient = new dialogflow.SessionsClient();
-const sessionPath = sessionClient.sessionPath(projectId, sessionId);
-
-//rtm slack message received
-const rtm = new RTMClient(token);
-rtm.start();
-=======
 )
 
 app.use(bodyParser.json())
@@ -58,37 +35,25 @@ const projectId = process.env.DIALOGFLOW_PROJECT_ID //https://dialogflow.com/doc
 const sessionId = 'quickstart-session-id'
 const sessionClient = new dialogflow.SessionsClient()
 const sessionPath = sessionClient.sessionPath(projectId, sessionId)
->>>>>>> 6f9f5d724410b584cf4ceaaa2e4ea0afa7474b2d
 
 
-<<<<<<< HEAD
-  let message = event.text;
-  const slackId = event.user;
-  
-  User.findOne({slackId: slackId})
-  .then(user=> {
-    if (!user || !user.access_token ){
-      //send link to user so that they can authenticate
-      rtm.sendMessage(routingUrl + '/google/calendar?slackId=' + slackId, event.channel);
-      //send this link to the user
-    }else{
-=======
 const rtm = new RTMClient(token)
 rtm.start()
 
 rtm.on('message', event => {
-  console.log(event)
+
+  // console.log(event);
   const message = event.text
   const slackId = event.user
   User.findOne({slackId: slackId})
     .then(user => {
-      if (!user || !user.access_token) {
-      // send link to user so that they can authenticate
+      /** Check that the user has not been authenticated AND we're not responding to a BOT's message **/
+      if ((!user || !user.access_token) && !event.bot_id && event.user !== 'UBV5QQP6G') {
+        /* send link to user so that they can authenticate */
         rtm.sendMessage(routingUrl + '/google/calendar?slackId=' + slackId, event.channel)
-      // send this link to the user
-      } else {
->>>>>>> 6f9f5d724410b584cf4ceaaa2e4ea0afa7474b2d
-      // dialog flow stuff here
+
+        /* The user is authenticated and it's not a BOT */
+    } else if (!event.bot_id && event.user !== 'UBV5QQP6G'){
 
       // user already exists: send query to Api.ai
         const request = {
@@ -103,15 +68,23 @@ rtm.on('message', event => {
         sessionClient
           .detectIntent(request)
           .then(responses => {
-            console.log('Detected intent')
             const result = responses[0].queryResult
-            console.log(`  Query: ${result.queryText}`)
-            console.log(`  Response: ${result.fulfillmentText}`)
-            rtm.sendMessage(result.fulfillmentText, event.channel)
+            //final confirmation of event
+            console.log('****pararmeters***', result.parameters);
+
+            if (result.action !== 'input.welcome' && result.allRequiredParamsPresent
+                  // && result.parameters.fields.subject.stringValue && result.parameters.fields.date.stringValue
+                ){
+              web.chat.postMessage(generateMessage(result, event.channel));
+            } else{
+              // web.chat.postMessage(result.fulfillmentText);
+              rtm.sendMessage(result.fulfillmentText, event.channel)
+            }
+
             if (result.intent) {
-              console.log(`  Intent: ${result.intent.displayName}`)
+              // console.log(`  Intent: ${result.intent.displayName}`)
             } else {
-              console.log(`  No intent matched.`)
+              // console.log(`  No intent matched.`)
             }
           }).then(msg => console.log('message sent')
           )
@@ -119,34 +92,66 @@ rtm.on('message', event => {
     })
 })
 
-<<<<<<< HEAD
-//webhook post route for dialogflow query responses
-app.post('/webhook', function(req, res){
-  if (req.body.queryResult.allRequiredParamsPresent){
-    res.json(req.body);
-=======
-// webhook post route for dialogflow query responses
-app.post('/webhook', function (req, res) {
-  if (req.body.queryResult.allRequiredParamsPresent) {
-<<<<<<< HEAD
-    res.json(req.body)
->>>>>>> 6f9f5d724410b584cf4ceaaa2e4ea0afa7474b2d
-=======
-    let parameters = req.body.queryResult.parameters
-    let subject = parameters.subject
-    let date = parameters.date
-    // go back to slack to generate button
-    
->>>>>>> master
+function generateMessage(result, channel){
+
+  let action = ""
+
+  if (result.intent.displayName === "remind"){
+    var subject = result.parameters.fields.subject.stringValue;
+    var date = new Date(result.parameters.fields.date.stringValue).toDateString();
+    action = `Reminder to ${subject} on ${date}`;
+  } else if (result.intent.displayName === "scheduler"){
+    var date = new Date(result.parameters.fields.date.stringValue).toDateString();
+    var time = new Date(result.parameters.fields.time.stringValue).toTimeString();
+    var invitees = result.parameters.fields.invitees.listValue.values;
+    console.log(invitees);
+    action = `A meeting is scheduled on ${date} at ${time} with ${invitees.map(p=> p.stringValue)}`
   }
+
+  return {
+      "text": "Would you like to add this to your calendar?",
+      "channel": channel,
+      "token": token,
+      "attachments": [
+          {
+              "text": action,
+              "fallback": "Shame... buttons aren't supported in this land",
+              "callback_id": "button_tutorial",
+              "color": "#3AA3E3",
+              "attachment_type": "default",
+              "actions": [
+                  {
+                      "name": "yes",
+                      "text": "yes",
+                      "type": "button",
+                      "value": "yes",
+                      "url": `http://localhost:1337/yesRoute?channel=${channel}`
+                      // "url": `${routingUrl}/google/addEvent?subject=${subject}&date=${date}&slackId=${slackId}`
+                  },
+                  {
+                      "name": "no",
+                      "text": "no",
+                      "type": "button",
+                      "value": "no"
+                  }
+              ]
+          }
+      ]
+  };
+}
+
+app.get('/yesRoute', (req, res)=> {
+  web.chat.postMessage({
+    "text": "Added this to your calendar",
+    "channel": req.query.channel,
+    "token": token,
+  })
+
+    res.redirect(`https://${slackTeam}.slack.com/messages/${req.query.channel}/`);
 })
 
 /* GOOGLE API ROUTES */
-<<<<<<< HEAD
-// GET route that redirects to google oauth2 url
-=======
 // GET route that redirects to google oatuh2 url
->>>>>>> 6f9f5d724410b584cf4ceaaa2e4ea0afa7474b2d
 app.get('/google/calendar', function (req, res) {
   console.log('get google calendar route')
   // TODO: get slackId, task, and action from slack
@@ -189,18 +194,6 @@ app.get('/google/calendar', function (req, res) {
           // user exists but failed to authenticate
           var url = oauth2Client.generateAuthUrl({
             // 'online' (default) or 'offline' (gets refresh_token)
-<<<<<<< HEAD
-              access_type: 'online',
-              // refresh_token only returned on the first authorization
-              scope: scopes,
-              state: encodeURIComponent(JSON.stringify({
-                auth_id: user._id
-              })),
-              prompt: 'consent'
-            })
-            console.log('auth url', url);
-            res.redirect(url);
-=======
             access_type: 'online',
             // refresh_token only returned on the first authorization
             scope: scopes,
@@ -210,7 +203,6 @@ app.get('/google/calendar', function (req, res) {
             prompt: 'consent'
           })
           res.redirect(url)
->>>>>>> 6f9f5d724410b584cf4ceaaa2e4ea0afa7474b2d
         } else {
           // user exists and is authenticated - shouldn't be here
           console.log('why are you here???')
@@ -223,10 +215,6 @@ app.get('/google/calendar', function (req, res) {
       res.status(500).send('internal server error')
     })
 })
-    // .catch((err) => {
-    //   console.log('error finding user', err)
-    //   res.status(500).send('internal server error')
-    // })
 
 // GET route that handles oauth callback for google api
 app.get('/google/callback', function (req, res) {
@@ -250,14 +238,7 @@ app.get('/google/callback', function (req, res) {
           user.access_token = tokens.access_token
           user.refresh_token = tokens.refresh_token
           user.save()
-<<<<<<< HEAD
-
-          // once you get the token, make API call
-          makeCalendarAPICall(tokens);
-          res.status(200).send('success')
-=======
           res.status(200).send('Successfully authenticated. You may now go back to Slack to send the message again')
->>>>>>> 6f9f5d724410b584cf4ceaaa2e4ea0afa7474b2d
         }
       })
       .catch((err) => {
@@ -267,8 +248,4 @@ app.get('/google/callback', function (req, res) {
     })
   })
 
-<<<<<<< HEAD
-app.listen(port || process.env.PORT);
-=======
 app.listen(port || process.env.PORT)
->>>>>>> 6f9f5d724410b584cf4ceaaa2e4ea0afa7474b2d
