@@ -79,7 +79,6 @@ app.post('/webhook', function(req, res){
   
 // GET route that redirects to google oatuh2 url
 app.get('/google/calendar', function (req, res) {
-  // TODO: get slackId, task, and action from slack
   let slackId = req.query.slackId || 'myslackId'
 
   // save action into database?
@@ -100,7 +99,7 @@ app.get('/google/calendar', function (req, res) {
             // generate a url that asks permissions for Google+ and Google Calendar scopes
             var url = oauth2Client.generateAuthUrl({
             // 'online' (default) or 'offline' (gets refresh_token)
-              access_type: 'offline',
+              access_type: 'online',
               // refresh_token only returned on the first authorization
               scope: scopes,
               state: encodeURIComponent(JSON.stringify({
@@ -108,15 +107,33 @@ app.get('/google/calendar', function (req, res) {
               })),
               prompt: 'consent'
             })
-            res.redirect(url)
+            res.redirect(url);
           })
           .catch((err) => {
             console.log('errorrrr', err)
             res.status(500).send('internal error')
           })
       } else {
-        // user already exists: send query to Api.ai
-        // TODO
+        // check access token
+        if (!user.access_token) {
+          // user exists but failed to authenticate 
+          var url = oauth2Client.generateAuthUrl({
+            // 'online' (default) or 'offline' (gets refresh_token)
+              access_type: 'online',
+              // refresh_token only returned on the first authorization
+              scope: scopes,
+              state: encodeURIComponent(JSON.stringify({
+                auth_id: user._id
+              })),
+              prompt: 'consent'
+            })
+            res.redirect(url);
+        } else {
+          // user exists and is authenticated - shouldn't be here
+          console.log("why are you here???");
+          res.status(500).send('server error');
+
+        }
       }
     })
     .catch((err) => {
@@ -147,10 +164,7 @@ app.get('/google/callback', function (req, res) {
           user.access_token = tokens.access_token
           user.refresh_token = tokens.refresh_token
           user.save()
-          
-          // once you get the token, make API call
-          makeCalendarAPICall(tokens);
-          res.status(200).send('success')
+          res.status(200).send('Successfully authenticated. You may now go back to Slack to send the message again');
         }
       })
       .catch((err) => {
