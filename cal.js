@@ -72,6 +72,8 @@ async function listEvents (oauth2Client) {
   })
 }
 
+// need to supply an object called tokens with 3 fields:
+// access_token, refresh_token, expiry_date
 function makeCalendarAPICall (tokens) {
   const oauth2Client = new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,

@@ -41,12 +41,12 @@ rtm.start();
 
 rtm.on('message', event=> {
 
-  console.log(event);
-
+  let message = event.text;
   const slackId = event.user;
+  
   User.findOne({slackId: slackId})
   .then(user=> {
-    if (!user || !user.access_token){
+    if (!user || !user.access_token ){
       //send link to user so that they can authenticate
       rtm.sendMessage(routingUrl + '/google/calendar?slackId=' + slackId, event.channel);
       //send this link to the user
@@ -96,8 +96,6 @@ app.get('/google/calendar', function (req, res) {
   console.log('get google calendar route')
   // TODO: get slackId, task, and action from slack
   let slackId = req.query.slackId || 'myslackId'
-  let message = req.query.message;
-  let channel = req.query.channel;
   // save action into database?
 
   // check if user exists
@@ -116,7 +114,7 @@ app.get('/google/calendar', function (req, res) {
             // generate a url that asks permissions for Google+ and Google Calendar scopes
             var url = oauth2Client.generateAuthUrl({
             // 'online' (default) or 'offline' (gets refresh_token)
-              access_type: 'offline',
+              access_type: 'online',
               // refresh_token only returned on the first authorization
               scope: scopes,
               state: encodeURIComponent(JSON.stringify({
@@ -124,20 +122,40 @@ app.get('/google/calendar', function (req, res) {
               })),
               prompt: 'consent'
             })
-            res.redirect(url)
+            res.redirect(url);
           })
           .catch((err) => {
             console.log('error', err)
             res.status(500).send('internal error')
           })
       } else {
+        // check access token
+        if (!user.access_token) {
+          // user exists but failed to authenticate
+          var url = oauth2Client.generateAuthUrl({
+            // 'online' (default) or 'offline' (gets refresh_token)
+              access_type: 'online',
+              // refresh_token only returned on the first authorization
+              scope: scopes,
+              state: encodeURIComponent(JSON.stringify({
+                auth_id: user._id
+              })),
+              prompt: 'consent'
+            })
+            console.log('auth url', url);
+            res.redirect(url);
+        } else {
+          // user exists and is authenticated - shouldn't be here
+          console.log("why are you here???");
+          res.status(500).send('server error');
 
-        } //end else
-      }) //end then
-      .catch(err => {
-        console.log('error finding user', err);
-        res.status(500).send('internal server error');
-      })
+        }
+      }
+    })
+    .catch((err) => {
+      console.log('error finding user', err)
+      res.status(500).send('internal server error')
+    })
 })
     // .catch((err) => {
     //   console.log('error finding user', err)
