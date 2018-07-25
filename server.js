@@ -1,18 +1,21 @@
 const { RTMClient, WebClient } = require('@slack/client')
 const teamId = 'sjs-2018'
 const token = process.env.BOT_USER_OAUTH_ACCESS_TOKEN
-let axios = require('axios')
+let axios = require('axios');
 const express = require('express')
 const app = express()
 const bodyParser = require('body-parser')
 const dialogflow = require('dialogflow')
 const routingUrl = 'https://2d0f7e15.ngrok.io'
+const slackTeam = 'sjs-2018'
 const port = 1337
 
+const BOT_ID = "UBV5QQP6G";
 // models
 const User = require('./models').User
 
 const scheduleBotChannel = 'DBWNA5TCN'
+const web = new WebClient(token);
 
 // gCal api setup
 const {google} = require('googleapis')
@@ -37,17 +40,21 @@ const rtm = new RTMClient(token)
 rtm.start()
 
 rtm.on('message', event => {
-  console.log(event)
+
+  // console.log(event);
   const message = event.text
   const slackId = event.user
   User.findOne({slackId: slackId})
     .then(user => {
-      if (!user || !user.access_token) {
-      // send link to user so that they can authenticate
+      /** Check that the user has not been authenticated AND we're not responding to a BOT's message **/
+      if ((!user || !user.access_token) && !event.bot_id && event.user !== 'UBV5QQP6G') {
+        /* send link to user so that they can authenticate */
         rtm.sendMessage(routingUrl + '/google/calendar?slackId=' + slackId, event.channel)
-      // send this link to the user
-      } else {
-      // dialog flow stuff here
+
+        /* The user is authenticated and it's not a BOT */
+    } else if (user.pendingTask){
+      rtm.sendMessage('Please approve your pending tasks!', event.channel);
+    } else if (!event.bot_id && event.user !== 'UBV5QQP6G'){
 
       // user already exists: send query to Api.ai
         const request = {
@@ -62,15 +69,22 @@ rtm.on('message', event => {
         sessionClient
           .detectIntent(request)
           .then(responses => {
-            console.log('Detected intent')
             const result = responses[0].queryResult
-            console.log(`  Query: ${result.queryText}`)
-            console.log(`  Response: ${result.fulfillmentText}`)
-            rtm.sendMessage(result.fulfillmentText, event.channel)
+            //final confirmation of event
+
+            if (result.action !== 'input.welcome' && result.allRequiredParamsPresent
+                  // && result.parameters.fields.subject.stringValue && result.parameters.fields.date.stringValue
+                ){
+              web.chat.postMessage(generateMessage(result, event.channel));
+            } else{
+              // web.chat.postMessage(result.fulfillmentText);
+              rtm.sendMessage(result.fulfillmentText, event.channel)
+            }
+
             if (result.intent) {
-              console.log(`  Intent: ${result.intent.displayName}`)
+              // console.log(`  Intent: ${result.intent.displayName}`)
             } else {
-              console.log(`  No intent matched.`)
+              // console.log(`  No intent matched.`)
             }
           }).then(msg => console.log('message sent')
           )
@@ -128,11 +142,78 @@ app.get('/google/addEvent', function (req, res) {
           })
       }
     })
+function generateMessage(result, channel){
+
+  let action = ""
+  let date = "";
+  let subject = "";
+  let time = "";
+  let invitees = "";
+  let url="";
+
+  if (result.intent.displayName === "remind"){
+
+    subject = result.parameters.fields.subject.stringValue;
+    date = new Date(result.parameters.fields.date.stringValue);
+    action = `Reminder to ${subject} on ${date.toDateString()}`;
+    // url = `http://localhost:1337/yesRoute?`
+    url = `${routingUrl}/google/addEvent?subject=${subject}&date=${date}&slackId=${slackId}&channel=${channel}`;
+    // ?subject=${subject}&date=${date}&channel=${channel}`
+
+  } else if (result.intent.displayName === "scheduler"){
+    date = new Date(result.parameters.fields.date.stringValue);
+    time = new Date(result.parameters.fields.time.stringValue).toTimeString();
+    invitees = result.parameters.fields.invitees.listValue.values.map(p=> p.stringValue);
+    action = `A meeting is scheduled on ${date.toDateString()} at ${time} with ${invitees.map(p=> p.stringValue)}`;
+    url = `${routingUrl}/google/addEvent?date=${date}&time=${time}&invitees=${invitees}&slackId=${slackId}&channel=${channel}`;
+  }
+  return {
+      "text": "Would you like to add this to your calendar?",
+      "channel": channel,
+      "token": token,
+      "attachments": [
+          {
+              "text": action,
+              "fallback": "Shame... buttons aren't supported in this land",
+              "callback_id": "button_tutorial",
+              "color": "#3AA3E3",
+              "attachment_type": "default",
+              "actions": [
+                  {
+                      "name": "yes",
+                      "text": "yes",
+                      "type": "button",
+                      "value": "yes",
+                      "url": url
+                      // "url": `${routingUrl}/google/addEvent?subject=${subject}&date=${date}&slackId=${slackId}`
+                  },
+                  {
+                      "name": "no",
+                      "text": "no",
+                      "type": "button",
+                      "value": "no"
+                  }
+              ]
+          }
+      ]
+  };
+}
+
+app.get('/yesRoute', (req, res)=> {
+  console.log('123456789', req.query.subject, req.query.date, req.query.channel);
+  web.chat.postMessage({
+    "text": "Added this to your calendar",
+    "channel": req.query.channel,
+    "token": token,
+  })
+  res.redirect(`https://${slackTeam}.slack.com/messages/${req.query.channel}/`);
 })
 
 /* GOOGLE API ROUTES */
 // GET route that redirects to google oatuh2 url
 app.get('/google/calendar', function (req, res) {
+  console.log('get google calendar route')
+  // TODO: get slackId, task, and action from slack
   let slackId = req.query.slackId || 'myslackId'
   // check if user exists
   User.findOne({
@@ -140,7 +221,7 @@ app.get('/google/calendar', function (req, res) {
   })
     .exec()
     .then((user) => {
-      if (!user) {
+      if (!user && user !== BOT_ID) {
       // create a new user in database
         var newUser = new User({
           slackId: slackId
@@ -161,7 +242,7 @@ app.get('/google/calendar', function (req, res) {
             res.redirect(url)
           })
           .catch((err) => {
-            console.log('errorrrr', err)
+            console.log('error', err)
             res.status(500).send('internal error')
           })
       } else {
@@ -221,7 +302,7 @@ app.get('/google/callback', function (req, res) {
         console.log('errorrrr', err)
         res.status(500).send('internal error')
       })
+    })
   })
-})
 
 app.listen(port || process.env.PORT)
