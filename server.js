@@ -53,6 +53,8 @@ rtm.on('message', event => {
         rtm.sendMessage(routingUrl + '/google/calendar?slackId=' + slackId, event.channel)
 
         /* The user is authenticated and it's not a BOT */
+    } else if (user.pendingTask){
+      rtm.sendMessage('Please approve your pending tasks!', event.channel);
     } else if (!event.bot_id && event.user !== 'UBV5QQP6G'){
 
       // user already exists: send query to Api.ai
