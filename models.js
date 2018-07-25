@@ -7,14 +7,21 @@ const Schema = mongoose.Schema;
 // Schemas
 
 const userSchema = Schema({
-  auth_id: String,
-  accessToken: String,
-  refreshToken: String,
+  access_token: String,
+  refresh_token: String,
   profileId: String,
-  expiry_date: String
+  expiry_date: String,
+  defaultSetting: {
+    meetingLength: {
+      type: Number,
+      default: 30
+    }
+  },
+  slackId: String,
+  slackUsername: String,
+  slackEmail: String,
+  slackDMId: String
 
-  // default setting
-  // meetingLength: ''
 })
 
 
@@ -27,6 +34,7 @@ const taskSchema = Schema({
     type: String,
     required: true
   },
+  status: String, // pending or scheduled
   gCalEventId: String,
   requesterId: String
 });
@@ -59,11 +67,11 @@ const meetingSchema = Schema({
 
 // Convert Schemas to Models
 const User = mongoose.model('User', userSchema);
-const Meeting = mongoose.model('Meeting', meetingSchema);
-const Task = mongoose.model('Meeting', taskSchema);
+// const Meeting = mongoose.model('Meeting', meetingSchema);
+const Task = mongoose.model('Task', taskSchema);
 
 module.exports = {
   User,
-  Meeting,
+  // Meeting,
   Task
 };
