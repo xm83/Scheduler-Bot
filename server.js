@@ -68,7 +68,8 @@ rtm.on('message', event=> {
       })
      .catch(err=> console.log("error", err));
   }
-  
+})
+
 // GET route that redirects to google oatuh2 url
 app.get('/google/calendar', function (req, res) {
   // TODO: get slackId, task, and action from slack
@@ -109,6 +110,7 @@ app.get('/google/calendar', function (req, res) {
       } else {
         // user already exists: send query to Api.ai
         // TODO
+
       }
     })
     .catch((err) => {
