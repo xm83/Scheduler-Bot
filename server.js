@@ -23,56 +23,61 @@ const oauth2Client = new google.auth.OAuth2(
   process.env.DOMAIN + '/google/callback'
 );
 
+
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
-
-const projectId = process.env.DIALOGFLOW_PROJECT_ID; //https://dialogflow.com/docs/agents#settings
-const sessionId = 'quickstart-session-id';
-const sessionClient = new dialogflow.SessionsClient();
-const sessionPath = sessionClient.sessionPath(projectId, sessionId);
 
 const rtm = new RTMClient(token);
 rtm.start();
 
 rtm.on('message', event=> {
-  const user = event.user;
-  let message = event.text;
-  let channel = event.channel;
-  console.log(message, channel, user);
-  const request = {
-    session: sessionPath,
-    queryInput: {
-      text: {
-        text: message,
-        languageCode: 'en-US'
-      }
-    }
-  }
-
-  if (user !== "UBV5QQP6G"){
-    sessionClient
-      .detectIntent(request)
-      .then(responses => {
-        // console.log('Detected intent');
-        const result = responses[0].queryResult;
-        console.log(`  Query: ${result.queryText}`);
-        console.log(`  Response: ${result.fulfillmentText}`);
-        // console.log(result.parameters);
-        // rtm.sendMessage(result.fulfillmentText, channel).then(msg => console.log(msg))
-        // console.log(result);
-        if (result.intent) {
-          console.log(`  Intent: ${result.intent.displayName}`);
-        } else {
-          console.log(`  No intent matched.`);
+  console.log(event);
+  const slackId = event.user;
+  User.findOne({slackId: slackId})
+  .then(user=> {
+    if (!user || !user.access_token){
+      //send link to user so that they can authenticate
+      rtm.sendMessage(routingUrl + '/google/calendar?slackId=' + slackId, event.channel);
+      //send this link to the user
+    }else{
+      // user already exists: send query to Api.ai
+        const request = {
+          session: sessionPath,
+          queryInput: {
+            text: {
+              text: message,
+              languageCode: 'en-US'
+            }
+          }
         }
-      })
-     .catch(err=> console.log("error", err));
+        sessionClient
+          .detectIntent(request)
+          .then(responses => {
+            console.log('Detected intent');
+            const result = responses[0].queryResult;
+            console.log(`  Query: ${result.queryText}`);
+            console.log(`  Response: ${result.fulfillmentText}`);
+            rtm.sendMessage(result.fulfillmentText , channel)
+            if (result.intent) {
+              console.log(`  Intent: ${result.intent.displayName}`);
+            } else {
+              console.log(`  No intent matched.`);
+            }
+          }).then(msg => console.log('message sent')
+        )
+    }
+  })
+
+})
+
+app.post('/webhook', function(req, res){
+  if (req.body.queryResult.allRequiredParamsPresent){
+    res.json(req.body);
   }
 })
 
 // GET route that redirects to google oatuh2 url
 app.get('/google/calendar', function (req, res) {
-  // TODO: get slackId, task, and action from slack
   let slackId = req.query.slackId || 'myslackId'
 
   // save action into database?
@@ -93,7 +98,7 @@ app.get('/google/calendar', function (req, res) {
             // generate a url that asks permissions for Google+ and Google Calendar scopes
             var url = oauth2Client.generateAuthUrl({
             // 'online' (default) or 'offline' (gets refresh_token)
-              access_type: 'offline',
+              access_type: 'online',
               // refresh_token only returned on the first authorization
               scope: scopes,
               state: encodeURIComponent(JSON.stringify({
@@ -101,16 +106,33 @@ app.get('/google/calendar', function (req, res) {
               })),
               prompt: 'consent'
             })
-            res.redirect(url)
+            res.redirect(url);
           })
           .catch((err) => {
             console.log('errorrrr', err)
             res.status(500).send('internal error')
           })
       } else {
-        // user already exists: send query to Api.ai
-        // TODO
+        // check access token
+        if (!user.access_token) {
+          // user exists but failed to authenticate
+          var url = oauth2Client.generateAuthUrl({
+            // 'online' (default) or 'offline' (gets refresh_token)
+              access_type: 'online',
+              // refresh_token only returned on the first authorization
+              scope: scopes,
+              state: encodeURIComponent(JSON.stringify({
+                auth_id: user._id
+              })),
+              prompt: 'consent'
+            })
+            res.redirect(url);
+        } else {
+          // user exists and is authenticated - shouldn't be here
+          console.log("why are you here???");
+          res.status(500).send('server error');
 
+        }
       }
     })
     .catch((err) => {
@@ -141,10 +163,7 @@ app.get('/google/callback', function (req, res) {
           user.access_token = tokens.access_token
           user.refresh_token = tokens.refresh_token
           user.save()
-
-          // once you get the token, make API call
-          makeCalendarAPICall(tokens);
-          res.status(200).send('success')
+          res.status(200).send('Successfully authenticated. You may now go back to Slack to send the message again');
         }
       })
       .catch((err) => {
