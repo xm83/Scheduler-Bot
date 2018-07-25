@@ -7,6 +7,7 @@ const app = express()
 const bodyParser = require('body-parser')
 const dialogflow = require('dialogflow')
 
+let app = express();
 // models
 const User = require('./models').User
 
@@ -20,23 +21,24 @@ const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID,
   process.env.GOOGLE_CLIENT_SECRET,
   process.env.DOMAIN + '/google/callback'
-)
+);
 
-app.use(bodyParser.json())
-app.use(bodyParser.urlencoded({ extended: false }))
 
-const rtm = new RTMClient(token)
-rtm.start()
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: false }));
 
-rtm.on('message', event => {
-  let message = event.text
-  let channel = event.channel
-  console.log(message, channel)
-  let responseMessage = 'sample response from backend'
-  const projectId = process.env.DIALOGFLOW_PROJECT_ID // https://dialogflow.com/docs/agents#settings
-  const sessionId = 'quickstart-session-id'
-  const sessionClient = new dialogflow.SessionsClient()
-  const sessionPath = sessionClient.sessionPath(projectId, sessionId)
+const rtm = new RTMClient(token);
+rtm.start();
+
+rtm.on('message', event=> {
+  const user = event.user;
+  let message = event.text;
+  let channel = event.channel;
+  console.log(message, channel, user);
+  const projectId = process.env.DIALOGFLOW_PROJECT_ID; //https://dialogflow.com/docs/agents#settings
+  const sessionId = 'quickstart-session-id';
+  const sessionClient = new dialogflow.SessionsClient();
+  const sessionPath = sessionClient.sessionPath(projectId, sessionId);
   const request = {
     session: sessionPath,
     queryInput: {
@@ -47,26 +49,34 @@ rtm.on('message', event => {
     }
   }
 
-  sessionClient
-    .detectIntent(request)
-    .then(responses => {
-      console.log('Detected intent')
-      const result = responses[0].queryResult
-      console.log(`  Query: ${result.queryText}`)
-      console.log(`  Response: ${result.fulfillmentText}`)
-      console.log(result.parameters)
-      rtm.sendMessage(result.fulfillmentText, channel)
-      if (result.intent) {
-        console.log(`  Intent: ${result.intent.displayName}`)
-      } else {
-        console.log(`  No intent matched.`)
-      }
-    })
+  if (user !== "UBV5QQP6G"){
+    sessionClient
+      .detectIntent(request)
+      .then(responses => {
+        console.log('Detected intent');
+        const result = responses[0].queryResult;
+        console.log(`  Query: ${result.queryText}`);
+        console.log(`  Response: ${result.fulfillmentText}`);
+        // console.log(result.parameters);
+        // rtm.sendMessage(result.fulfillmentText , channel)
+        // console.log(result);
+        if (result.intent) {
+          console.log(`  Intent: ${result.intent.displayName}`);
+        } else {
+          console.log(`  No intent matched.`);
+        }
+      })
     .then(msg =>
-      console.log('message sent:' + msg)
-    ).catch(err => console.log('error', err))
+      console.log('message sent')
+    ).catch(err=> console.log("error", err));
+  }
 })
 
+app.post('/webhook', function(req, res){
+  if (req.body.queryResult.allRequiredParamsPresent){
+    res.json(req.body);
+  }
+  
 // GET route that redirects to google oatuh2 url
 app.get('/google/calendar', function (req, res) {
   // TODO: get slackId, task, and action from slack
@@ -150,14 +160,4 @@ app.get('/google/callback', function (req, res) {
   })
 })
 
-app.post('/test', function (req, res) {
-  console.log('something')
-  // res.setStatus(200);
-  // res.setContentType('/text/plain');
-  // res.getStreamWriter.writeString(req.body.data.challenge);
-  // console.log(req);
-  res.send(req.body.challenge)
-  // res.send(req.body.data.challenge);
-})
-
-app.listen(1337)
+app.listen(1337);
