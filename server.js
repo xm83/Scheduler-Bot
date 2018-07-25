@@ -70,7 +70,6 @@ rtm.on('message', event => {
           .then(responses => {
             const result = responses[0].queryResult
             //final confirmation of event
-            console.log('****pararmeters***', result.parameters);
 
             if (result.action !== 'input.welcome' && result.allRequiredParamsPresent
                   // && result.parameters.fields.subject.stringValue && result.parameters.fields.date.stringValue
@@ -95,19 +94,28 @@ rtm.on('message', event => {
 function generateMessage(result, channel){
 
   let action = ""
+  let date = "";
+  let subject = "";
+  let time = "";
+  let invitees = "";
+  let url="";
 
   if (result.intent.displayName === "remind"){
-    var subject = result.parameters.fields.subject.stringValue;
-    var date = new Date(result.parameters.fields.date.stringValue).toDateString();
-    action = `Reminder to ${subject} on ${date}`;
-  } else if (result.intent.displayName === "scheduler"){
-    var date = new Date(result.parameters.fields.date.stringValue).toDateString();
-    var time = new Date(result.parameters.fields.time.stringValue).toTimeString();
-    var invitees = result.parameters.fields.invitees.listValue.values;
-    console.log(invitees);
-    action = `A meeting is scheduled on ${date} at ${time} with ${invitees.map(p=> p.stringValue)}`
-  }
 
+    subject = result.parameters.fields.subject.stringValue;
+    date = new Date(result.parameters.fields.date.stringValue);
+    action = `Reminder to ${subject} on ${date.toDateString()}`;
+    // url = `http://localhost:1337/yesRoute?`
+    url = `${routingUrl}/google/addEvent?subject=${subject}&date=${date}&slackId=${slackId}&channel=${channel}`;
+    // ?subject=${subject}&date=${date}&channel=${channel}`
+
+  } else if (result.intent.displayName === "scheduler"){
+    date = new Date(result.parameters.fields.date.stringValue);
+    time = new Date(result.parameters.fields.time.stringValue).toTimeString();
+    invitees = result.parameters.fields.invitees.listValue.values.map(p=> p.stringValue);
+    action = `A meeting is scheduled on ${date.toDateString()} at ${time} with ${invitees.map(p=> p.stringValue)}`;
+    url = `${routingUrl}/google/addEvent?date=${date}&time=${time}&invitees=${invitees}&slackId=${slackId}&channel=${channel}`;
+  }
   return {
       "text": "Would you like to add this to your calendar?",
       "channel": channel,
@@ -125,7 +133,7 @@ function generateMessage(result, channel){
                       "text": "yes",
                       "type": "button",
                       "value": "yes",
-                      "url": `http://localhost:1337/yesRoute?channel=${channel}`
+                      "url": url
                       // "url": `${routingUrl}/google/addEvent?subject=${subject}&date=${date}&slackId=${slackId}`
                   },
                   {
@@ -141,13 +149,13 @@ function generateMessage(result, channel){
 }
 
 app.get('/yesRoute', (req, res)=> {
+  console.log('123456789', req.query.subject, req.query.date, req.query.channel);
   web.chat.postMessage({
     "text": "Added this to your calendar",
     "channel": req.query.channel,
     "token": token,
   })
-
-    res.redirect(`https://${slackTeam}.slack.com/messages/${req.query.channel}/`);
+  res.redirect(`https://${slackTeam}.slack.com/messages/${req.query.channel}/`);
 })
 
 /* GOOGLE API ROUTES */
