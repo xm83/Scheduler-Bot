@@ -67,7 +67,7 @@ rtm.on('message', event => {
             const result = responses[0].queryResult
             console.log(`  Query: ${result.queryText}`)
             console.log(`  Response: ${result.fulfillmentText}`)
-            rtm.sendMessage(result.fulfillmentText, channel)
+            rtm.sendMessage(result.fulfillmentText, event.channel)
             if (result.intent) {
               console.log(`  Intent: ${result.intent.displayName}`)
             } else {
@@ -82,7 +82,11 @@ rtm.on('message', event => {
 // webhook post route for dialogflow query responses
 app.post('/webhook', function (req, res) {
   if (req.body.queryResult.allRequiredParamsPresent) {
-    res.json(req.body)
+    let parameters = req.body.queryResult.parameters
+    let subject = parameters.subject
+    let date = parameters.date
+    // go back to slack to generate button
+    
   }
 })
 
