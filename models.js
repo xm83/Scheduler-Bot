@@ -20,27 +20,40 @@ const userSchema = Schema({
   slackId: String,
   slackUsername: String,
   slackEmail: String,
-  slackDMId: String
-
+  slackDMId: String,
+  pendingTask: {
+    subject: {
+      type: String,
+      required: true
+    },
+    date: {
+      type: String,
+      required: true
+    },
+    status: {
+      type: String,
+      default: 'pending'
+    }
+  }
 })
 
 
-const taskSchema = Schema({
-  subject: {
-    type: String,
-    required: true
-  },
-  day: {
-    type: String,
-    required: true
-  },
-  status: String, // pending or scheduled
-  gCalEventId: String,
-  requesterId: {
-    type: Schema.Types.ObjectId, 
-    ref: 'User'
-  }
-});
+// const taskSchema = Schema({
+//   subject: {
+//     type: String,
+//     required: true
+//   },
+//   day: {
+//     type: String,
+//     required: true
+//   },
+//   status: String, // pending or scheduled
+//   gCalEventId: String,
+//   requesterId: {
+//     type: Schema.Types.ObjectId, 
+//     ref: 'User'
+//   }
+// });
 
 const meetingSchema = Schema({
   day: {
@@ -74,10 +87,10 @@ const meetingSchema = Schema({
 // Convert Schemas to Models
 const User = mongoose.model('User', userSchema);
 // const Meeting = mongoose.model('Meeting', meetingSchema);
-const Task = mongoose.model('Task', taskSchema);
+// const Task = mongoose.model('Task', taskSchema);
 
 module.exports = {
-  User,
+  User
   // Meeting,
-  Task
+  // Task
 };

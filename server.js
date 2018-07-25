@@ -31,11 +31,10 @@ app.use(bodyParser.json())
 app.use(bodyParser.urlencoded({ extended: false }))
 
 // dialogflow session setup
-const projectId = process.env.DIALOGFLOW_PROJECT_ID //https://dialogflow.com/docs/agents#settings
+const projectId = process.env.DIALOGFLOW_PROJECT_ID // https://dialogflow.com/docs/agents#settings
 const sessionId = 'quickstart-session-id'
 const sessionClient = new dialogflow.SessionsClient()
 const sessionPath = sessionClient.sessionPath(projectId, sessionId)
-
 
 const rtm = new RTMClient(token)
 rtm.start()
@@ -93,6 +92,56 @@ rtm.on('message', event => {
     })
 })
 
+app.get('/google/addEvent', function (req, res) {
+  let subject = req.params.subject
+  let date = req.params.date
+  let slackId = req.params.slackId
+  // get tokens to make API calls
+  User.findOne({
+    slackId: slackId
+  })
+    .exec()
+    .then((user) => {
+      if (!user || !user.access_token) {
+        console.log('no user found')
+        res.status(500).send('internal error')
+      } else {
+        let tokens = {
+          access_token: user.access_token,
+          refresh_token: user.refresh_token,
+          expiry_date: user.expiry_date
+        }
+        // store a pendingTask in User model to prevent more than one scheduling at a time
+        user.pendingTask = {
+          subject: subject,
+          date: date,
+          status: 'pending'
+        }
+        user.save()
+          .then(() => {
+            makeCalendarAPICall(tokens, subject, date)
+              .then((success) => {
+                // clear pendingTask
+                console.log('clearing pendingTask')
+                user.pendingTask = null
+                user.save()
+                  .then(() => res.send('success adding event to google calendar'))
+                  .catch((err) => {
+                    console.log('error!!!', err)
+                    res.status(500).send('internal error')
+                  })
+              })
+              .catch((err) => {
+                console.log('error', err)
+                res.status(500).send('internal error')
+              })
+          })
+          .catch((err) => {
+            console.log('error', err)
+            res.status(500).send('internal error')
+          })
+      }
+    })
 function generateMessage(result, channel){
 
   let action = ""
@@ -166,8 +215,6 @@ app.get('/google/calendar', function (req, res) {
   console.log('get google calendar route')
   // TODO: get slackId, task, and action from slack
   let slackId = req.query.slackId || 'myslackId'
-  // save action into database?
-
   // check if user exists
   User.findOne({
     slackId: slackId

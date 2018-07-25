@@ -1,6 +1,6 @@
 // models
 const User = require('./models').User
-const Task = require('./models').Task
+// const Task = require('./models').Task
 
 // google api setup
 const {google} = require('googleapis')
@@ -11,21 +11,25 @@ const scopes = [
   'https://www.googleapis.com/auth/calendar'
 ]
 
-async function addEvent (oauth2Client) {
+async function addEvent (oauth2Client, subject, date) {
   // access calendar on behalf of this new client
   const calendar = google.calendar({version: 'v3', auth: oauth2Client})
+
+  let newDate = new Date(date);
+  let days = newDate.getDate();
+  newDate.setDate(days + 1);
 
   return new Promise((resolve, reject) => {
     calendar.event.insert({
       calendarId: 'primary',
-      summary: 'eat fish',
-      location: '800 Howard St., San Francisco, CA 94103',
-      'description': 'A chance to hear more about Google\'s developer products.',
-      start: {
-        date: new Date(Date.now() + 30000) // 30 seconds from now
-      },
-      end: {
-        date: new Date(Date.now() + 90000)
+      resource: {
+        summary: subject,
+        start: {
+          date: date.toISOString().substring(0, 10) // yyyy-mm-dd
+        },
+        end: {
+          date: newDate.toISOString().substring(0, 10)
+        }
       }
     }, (err, {data}) => {
       if (err) {
@@ -74,7 +78,7 @@ async function listEvents (oauth2Client) {
 
 // need to supply an object called tokens with 3 fields:
 // access_token, refresh_token, expiry_date
-function makeCalendarAPICall (tokens) {
+async function makeCalendarAPICall (tokens, subject, data) {
   const oauth2Client = new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
@@ -115,18 +119,23 @@ function makeCalendarAPICall (tokens) {
   // do tasks accordingly
   if (action === 'insert') {
     console.log('action is insert')
-    addEvent(oauth2Client)
-      .then((event) => {
-        console.log('event added:', event)
-      })
-      .catch((err) => {
-        console.log('error:', err)
-      })
+    return new Promise((resolve, reject) => {
+      addEvent(oauth2Client, subject, data)
+        .then((event) => {
+          console.log('event added:', event)
+          resolve('success');
+
+        })
+        .catch((err) => {
+          console.log('error:', err)
+          reject(err);
+        })
+    })
     // get a list of upcoming events for time conflict checking
-    listEvents(oauth2Client)
-      .then((events) => {
-        console.log('Events', events)
-      })
+    // listEvents(oauth2Client)
+    //   .then((events) => {
+    //     console.log('Events', events)
+    //   })
   } else if (action === 'delete') {
     console.log('action is delete')
   } else {
