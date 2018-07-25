@@ -6,8 +6,9 @@ const express = require('express')
 const app = express()
 const bodyParser = require('body-parser')
 const dialogflow = require('dialogflow')
+const routingUrl = 'https://2d0f7e15.ngrok.io'
+const port = 1337
 
-let app = express();
 // models
 const User = require('./models').User
 
@@ -16,30 +17,39 @@ const scheduleBotChannel = 'DBWNA5TCN'
 // gCal api setup
 const {google} = require('googleapis')
 const {scopes, makeCalendarAPICall} = require('./cal')
-// TODO: how to create a new unique google profile for every new user???
+
 const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID,
   process.env.GOOGLE_CLIENT_SECRET,
   process.env.DOMAIN + '/google/callback'
-);
+)
+
+app.use(bodyParser.json())
+app.use(bodyParser.urlencoded({ extended: false }))
+
+// dialogflow session setup
+const projectId = process.env.DIALOGFLOW_PROJECT_ID //https://dialogflow.com/docs/agents#settings
+const sessionId = 'quickstart-session-id'
+const sessionClient = new dialogflow.SessionsClient()
+const sessionPath = sessionClient.sessionPath(projectId, sessionId)
 
 
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: false }));
+const rtm = new RTMClient(token)
+rtm.start()
 
-const rtm = new RTMClient(token);
-rtm.start();
-
-rtm.on('message', event=> {
-  console.log(event);
-  const slackId = event.user;
+rtm.on('message', event => {
+  console.log(event)
+  const message = event.text
+  const slackId = event.user
   User.findOne({slackId: slackId})
-  .then(user=> {
-    if (!user || !user.access_token){
-      //send link to user so that they can authenticate
-      rtm.sendMessage(routingUrl + '/google/calendar?slackId=' + slackId, event.channel);
-      //send this link to the user
-    }else{
+    .then(user => {
+      if (!user || !user.access_token) {
+      // send link to user so that they can authenticate
+        rtm.sendMessage(routingUrl + '/google/calendar?slackId=' + slackId, event.channel)
+      // send this link to the user
+      } else {
+      // dialog flow stuff here
+
       // user already exists: send query to Api.ai
         const request = {
           session: sessionPath,
@@ -53,29 +63,30 @@ rtm.on('message', event=> {
         sessionClient
           .detectIntent(request)
           .then(responses => {
-            console.log('Detected intent');
-            const result = responses[0].queryResult;
-            console.log(`  Query: ${result.queryText}`);
-            console.log(`  Response: ${result.fulfillmentText}`);
-            rtm.sendMessage(result.fulfillmentText , channel)
+            console.log('Detected intent')
+            const result = responses[0].queryResult
+            console.log(`  Query: ${result.queryText}`)
+            console.log(`  Response: ${result.fulfillmentText}`)
+            rtm.sendMessage(result.fulfillmentText, channel)
             if (result.intent) {
-              console.log(`  Intent: ${result.intent.displayName}`);
+              console.log(`  Intent: ${result.intent.displayName}`)
             } else {
-              console.log(`  No intent matched.`);
+              console.log(`  No intent matched.`)
             }
           }).then(msg => console.log('message sent')
-        )
-    }
-  })
-
+          )
+      }
+    })
 })
 
-app.post('/webhook', function(req, res){
-  if (req.body.queryResult.allRequiredParamsPresent){
-    res.json(req.body);
+// webhook post route for dialogflow query responses
+app.post('/webhook', function (req, res) {
+  if (req.body.queryResult.allRequiredParamsPresent) {
+    res.json(req.body)
   }
 })
 
+/* GOOGLE API ROUTES */
 // GET route that redirects to google oatuh2 url
 app.get('/google/calendar', function (req, res) {
   let slackId = req.query.slackId || 'myslackId'
@@ -106,7 +117,7 @@ app.get('/google/calendar', function (req, res) {
               })),
               prompt: 'consent'
             })
-            res.redirect(url);
+            res.redirect(url)
           })
           .catch((err) => {
             console.log('errorrrr', err)
@@ -118,20 +129,19 @@ app.get('/google/calendar', function (req, res) {
           // user exists but failed to authenticate
           var url = oauth2Client.generateAuthUrl({
             // 'online' (default) or 'offline' (gets refresh_token)
-              access_type: 'online',
-              // refresh_token only returned on the first authorization
-              scope: scopes,
-              state: encodeURIComponent(JSON.stringify({
-                auth_id: user._id
-              })),
-              prompt: 'consent'
-            })
-            res.redirect(url);
+            access_type: 'online',
+            // refresh_token only returned on the first authorization
+            scope: scopes,
+            state: encodeURIComponent(JSON.stringify({
+              auth_id: user._id
+            })),
+            prompt: 'consent'
+          })
+          res.redirect(url)
         } else {
           // user exists and is authenticated - shouldn't be here
-          console.log("why are you here???");
-          res.status(500).send('server error');
-
+          console.log('why are you here???')
+          res.status(500).send('server error')
         }
       }
     })
@@ -163,7 +173,7 @@ app.get('/google/callback', function (req, res) {
           user.access_token = tokens.access_token
           user.refresh_token = tokens.refresh_token
           user.save()
-          res.status(200).send('Successfully authenticated. You may now go back to Slack to send the message again');
+          res.status(200).send('Successfully authenticated. You may now go back to Slack to send the message again')
         }
       })
       .catch((err) => {
@@ -173,4 +183,4 @@ app.get('/google/callback', function (req, res) {
   })
 })
 
-app.listen(1337);
+app.listen(port || process.env.PORT)
