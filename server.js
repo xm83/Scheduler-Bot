@@ -60,6 +60,7 @@ rtm.on('message', event => {
             }
           }
         }
+        
         sessionClient
           .detectIntent(request)
           .then(responses => {
@@ -67,7 +68,7 @@ rtm.on('message', event => {
             const result = responses[0].queryResult
             console.log(`  Query: ${result.queryText}`)
             console.log(`  Response: ${result.fulfillmentText}`)
-            rtm.sendMessage(result.fulfillmentText, channel)
+            rtm.sendMessage(result.fulfillmentText, event.channel)
             if (result.intent) {
               console.log(`  Intent: ${result.intent.displayName}`)
             } else {
