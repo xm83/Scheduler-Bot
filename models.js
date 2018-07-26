@@ -22,18 +22,9 @@ const userSchema = Schema({
   slackEmail: String,
   slackDMId: String,
   pendingTask: {
-    subject: {
-      type: String,
-      required: true
-    },
-    date: {
-      type: String,
-      required: true
-    },
-    status: {
-      type: String,
-      default: 'pending'
-    }
+    subject: String,
+    date: String,
+    status: String
   }
 })
 
