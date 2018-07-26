@@ -41,47 +41,60 @@ const userSchema = Schema({
 //   status: String, // pending or scheduled
 //   gCalEventId: String,
 //   requesterId: {
-//     type: Schema.Types.ObjectId, 
+//     type: Schema.Types.ObjectId,
 //     ref: 'User'
 //   }
 // });
 
 const meetingSchema = Schema({
   day: {
-    type: String,
-    required: true
-  },
-  time: {
-    type: String,
-    required: true
-  },
-  invitees: {
-    type: [{ type: Schema.Types.ObjectId, ref: 'User' }],
-    default: [],
-    required: true
-  },
-  subject: String,
-  location: String,
-  meetingLength: String,
-  status: String, // pending or scheduled
-  createdAt: {
     type: Date,
-    default: '',
+    required: true
+  },
+  start: {
+    type: String,
+    required: true
+  },
+  end: {
+    type: String,
+    required: true
+  },
+  invitees: [],
+  eventId: String,
+  // invitees: {
+  //   type: [{ type: Schema.Types.ObjectId, ref: 'User' }],
+  //   default: [],
+  //   required: true
+  // },
+  subject: String,
+  // status: String, // pending or scheduled
+  createdAt: {
+    type: Date
   },
   requesterId: {
-    type: Schema.Types.ObjectId, 
+    type: Schema.Types.ObjectId,
     ref: 'User'
   },
+  eventID: {
+    type: String,
+    required: true
+  },
+  calendarID: {
+    type: String,
+    required: true
+  }
   // google calendar fields
 });
 
 // Convert Schemas to Models
 const User = mongoose.model('User', userSchema);
+const Meeting = mongoose.model('Meeting', meetingSchema);
 // const Meeting = mongoose.model('Meeting', meetingSchema);
 // const Task = mongoose.model('Task', taskSchema);
 
 module.exports = {
-  User
+  User,
+  Meeting
   // Meeting,
   // Task
 };
