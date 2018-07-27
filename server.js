@@ -1,21 +1,21 @@
 const { RTMClient, WebClient } = require('@slack/client')
-const teamId = 'sjs-2018'
+// const teamId = 'sjs-2018'
 const token = process.env.BOT_USER_OAUTH_ACCESS_TOKEN
 let axios = require('axios')
 const express = require('express')
 const app = express()
 const bodyParser = require('body-parser')
 const dialogflow = require('dialogflow')
-const routingUrl = 'http://32563138.ngrok.io'
+// const routingUrl = 'http://32563138.ngrok.io'
 const slackTeam = 'sjs-2018'
 const port = 1337
+// const handlesNo = `${process.env.DOMAIN}/noRoute`
 
-const BOT_ID = 'UBV5QQP6G'
+const BOT_ID = 'BBYLBEHGV'
 // models
 const User = require('./models').User
 const Meeting = require('./models').Meeting
 
-const scheduleBotChannel = 'DBWNA5TCN'
 const web = new WebClient(token)
 
 // gCal api setup
@@ -41,7 +41,6 @@ const rtm = new RTMClient(token)
 rtm.start()
 
 rtm.on('message', event => {
-  // console.log(event);
   const message = event.text
   const slackId = event.user
   console.log(slackId, 'slackid on message')
@@ -49,16 +48,16 @@ rtm.on('message', event => {
     User.findOne({slackId: slackId})
       .then(user => {
         console.log('user:', user)
-      /** Check that the user has not been authenticated AND we're not responding to a BOT's message **/
-      if ((!user || !user.access_token) && !event.bot_id && event.user !== 'UBV5QQP6G') {
+        /** Check that the user has not been authenticated AND we're not responding to a BOT's message **/
+        if ((!user || !user.access_token) && !event.bot_id && event.user !== BOT_ID) {
         /* send link to user so that they can authenticate */
-          rtm.sendMessage(routingUrl + '/google/calendar?slackId=' + slackId, event.channel)
+          rtm.sendMessage(process.env.DOMAIN + '/google/calendar?slackId=' + slackId, event.channel)
 
         /* The user is authenticated and it's not a BOT */
-        } else if (Object.keys(user.pendingTask).length === 0 && !event.bot_id && event.user !== 'UBV5QQP6G') {
+        } else if (Object.keys(user.pendingTask).length === 0 && !event.bot_id && event.user !== BOT_ID) {
           console.log('pending:', user.pendingTask)
-        rtm.sendMessage('Please approve your pending tasks!', event.channel)
-        } else if (!event.bot_id && event.user !== 'UBV5QQP6G') {
+          rtm.sendMessage('Please approve your pending tasks!', event.channel)
+        } else if (!event.bot_id && event.user !== BOT_ID) {
           // user already exists: send query to Api.ai
           const request = {
             session: sessionPath,
@@ -78,7 +77,7 @@ rtm.on('message', event => {
               if (result.action !== 'input.welcome' && result.allRequiredParamsPresent
               // && result.parameters.fields.subject.stringValue && result.parameters.fields.date.stringValue
               ) {
-                generateMessage(result, event.channel, slackId, function (message ){
+                generateMessage(result, event.channel, slackId, function (message) {
                   web.chat.postMessage(message)
                 })
               } else {
@@ -86,7 +85,7 @@ rtm.on('message', event => {
                 rtm.sendMessage(result.fulfillmentText, event.channel)
               }
 
-              if (result.intent === "cancel-meeting") {
+              if (result.intent === 'cancel-meeting') {
               // console.log(`  Intent: ${result.intent.displayName}`)
               } else {
               // console.log(`  No intent matched.`)
@@ -99,15 +98,15 @@ rtm.on('message', event => {
   }
 })
 
-app.get('/google/addEvent', function (req, res) {
+app.get('/google/event', function (req, res) {
   let subject = req.query.subject
   let date = req.query.date
   let slackId = req.query.slackId
-  let channel = req.query.channel;
-  let tokens = {};
-  let intent = req.query.intent;
-  let fields = req.query.fields;
-  let userId = '';
+  let channel = req.query.channel
+  let tokens = {}
+  let intent = req.query.intent
+  let fields = req.query.fields
+  let userId = ''
   // get tokens''o make API calls
   console.log('slackid', slackId)
   User.findOne({
@@ -122,27 +121,28 @@ app.get('/google/addEvent', function (req, res) {
         tokens = {
           access_token: user.access_token,
           refresh_token: user.refresh_token,
-          expiry_date: user.expiry_date,
+          expiry_date: user.expiry_date
         }
-        userId = user._id;
-        // store a pendingTask in User model to prevent more than one scheduling at a time
+        userId = user._id
+        // store a pendingTask in User model in case google calendar api fails
+        console.log('hope you are here: subject is', subject)
         user.pendingTask = {
           subject: subject,
           status: 'pending'
         }
       }
-      return user;
+      return user
     }).then(user => {
-        makeCalendarAPICall(tokens, userId, fields, intent)
+      makeCalendarAPICall(tokens, userId, fields, intent)
         .then((success) => {
           // clear pendingTask
           console.log('clearing pendingTask')
           user.pendingTask = {}
-          web.chat.postMessage({
-            'text': 'Added this to your calendar',
-            'channel': req.query.channel,
-            'token': token
-          });
+          // web.chat.postMessage({
+          //   'text': 'Added this to your calendar',
+          //   'channel': req.query.channel,
+          //   'token': token
+          // })
           user.save()
             .then(() => res.redirect(`https://${slackTeam}.slack.com/messages/${req.query.channel}/`))
             .catch((err) => {
@@ -171,29 +171,30 @@ function generateMessage (result, channel, slackId, callback) {
   if (result.intent.displayName === 'remind') {
     subject = result.parameters.fields.subject.stringValue
     date = new Date(result.parameters.fields.date.stringValue)
-    var fields = encodeURIComponent(JSON.stringify(result.parameters.fields))
-    console.log('FIELDS',fields);
+    let fields = encodeURIComponent(JSON.stringify(result.parameters.fields))
+    console.log('FIELDS', fields)
     // date.slice(0, 10);
-    console.log(date, JSON.stringify(date), 'Dates in generate message');
-    let uriSubject=encodeURIComponent(subject);
-    url = `${routingUrl}/google/addEvent?fields=${fields}&slackId=${slackId}&channel=${channel}&intent=remind`
-    // url = `${routingUrl}/google/addEvent?date=${date.toISOString()}&subject=${uriSubject}&slackId=${slackId}&channel=${channel}&intent=remind`  //remember to add date to the query
+    console.log(date, JSON.stringify(date), 'Dates in generate message')
+    let uriSubject = encodeURIComponent(subject)
+    url = `${process.env.DOMAIN}/google/event?fields=${fields}&slackId=${slackId}&channel=${channel}&intent=remind`
+    // url = `${routingUrl}/google/event?date=${date.toISOString()}&subject=${uriSubject}&slackId=${slackId}&channel=${channel}&intent=remind`  //remember to add date to the query
     action = `Reminder to ${subject} on ${date.toDateString()}`
 
     buttons = [{
       'name': 'yes',
-      'text': 'yes',
+      'text': 'Yes',
       'type': 'button',
-      'value': 'yes',
-      'url': url
-      // "url": `${routingUrl}/google/addEvent?subject=${subject}&date=${date}&slackId=${slackId}`
+      'value': url
+      // 'url': url
+      // "url": `${routingUrl}/google/event?subject=${subject}&date=${date}&slackId=${slackId}`
     },
     {
       'name': 'no',
-      'text': 'no',
+      'text': 'No',
       'type': 'button',
       'value': 'no'
-    }];
+      // 'url': handlesNo
+    }]
 
     callback({
       'text': 'Would you like to add this to your calendar?',
@@ -211,27 +212,28 @@ function generateMessage (result, channel, slackId, callback) {
       ]
     })
   } else if (result.intent.displayName === 'scheduler') {
-    var fields = encodeURIComponent(JSON.stringify(result.parameters.fields))
+    let fields = encodeURIComponent(JSON.stringify(result.parameters.fields))
     date = new Date(result.parameters.fields.date.stringValue)
     time = new Date(result.parameters.fields.time.stringValue).toTimeString()
     invitees = result.parameters.fields.invitees.listValue.values.map(p => p.stringValue)
-    // url = `${routingUrl}/google/addEvent?date=${date}&time=${time}&invitees=${invitees}&slackId=${slackId}&channel=${channel}&intent=schedule`
-    url = `${routingUrl}/google/addEvent?fields=${fields}&slackId=${slackId}&channel=${channel}&intent=schedule`
-    action = `A meeting is scheduled on ${date.toDateString()} at ${time} with ${invitees}`;
+    // url = `${routingUrl}/google/event?date=${date}&time=${time}&invitees=${invitees}&slackId=${slackId}&channel=${channel}&intent=schedule`
+    url = `${process.env.DOMAIN}/google/event?fields=${fields}&slackId=${slackId}&channel=${channel}&intent=schedule`
+    action = `A meeting is scheduled on ${date.toDateString()} at ${time} with ${invitees}`
     buttons = [{
       'name': 'yes',
-      'text': 'yes',
+      'text': 'Yes',
       'type': 'button',
-      'value': 'yes',
-      'url': url
-      // "url": `${routingUrl}/google/addEvent?subject=${subject}&date=${date}&slackId=${slackId}`
+      'value': url
+      // 'url': url
+      // "url": `${routingUrl}/google/event?subject=${subject}&date=${date}&slackId=${slackId}`
     },
     {
       'name': 'no',
-      'text': 'no',
+      'text': 'No',
       'type': 'button',
       'value': 'no'
-    }];
+      // 'url': handlesNo
+    }]
 
     callback({
       'text': 'Would you like to add this to your calendar?',
@@ -248,73 +250,106 @@ function generateMessage (result, channel, slackId, callback) {
         }
       ]
     })
-
   } else if (result.intent.displayName === 'cancel-meeting') {
-    var fields = encodeURIComponent(JSON.stringify(result.parameters.fields))
+    let fields = encodeURIComponent(JSON.stringify(result.parameters.fields))
     date = new Date(result.parameters.fields.date.stringValue)
-    action = 'Select the meeting to cancel'
-    let tempArr = [];
-    User.findOne({slackId: slackId})
-    .then(user => {
-      console.log(user);
-      return user._id;
-    })
-    .then(id => {
-      Meeting.find({requesterId: id})//{requesterId: id}
-      .then(possibleMeetings => {
-        possibleMeetings.forEach(mtg => {
-          let ids = JSON.stringify({
-            eventID: mtg.eventID,
-            calendarID: mtg.calendarID
-          });
-          console.log(mtg.day);
-          console.log(date);
-          // console.log(mtg.day.getTime().equals(date.getTime()));
-          // if (mtg.day.getTime().equals(date.getTime())){
-          buttons.push({
-              'name': mtg.subject + '@' + mtg.start,
-              'text': mtg.subject + '@' + mtg.start,
-              'type': 'button',
-              'value': mtg.subject,
-              'url': `${routingUrl}/google/addEvent?fields=${encodeURIComponent(ids)}&slackId=${slackId}&channel=${channel}&intent=cancel`
-            })
-          // }
-        })
-        return buttons;
-      }).then(buttons=> {
-        console.log('cancel buttons', buttons, channel);
+    console.log('FIELDS', fields)
 
-        callback({
-          'text': 'Would you like to add this to your calendar?',
-          'channel': channel,
-          'token': token,
-          'attachments': [
-            {
-              'text': action,
-              'fallback': "Shame... buttons aren't supported in this land",
-              'callback_id': 'button_tutorial',
-              'color': '#3AA3E3',
-              'attachment_type': 'default',
-              'actions': buttons
-            }
-          ]
-        })
+    User.findOne({slackId: slackId})
+      .then(user => {
+        console.log(user)
+        return user._id
       })
-    })
+      .then(id => {
+        Meeting.find({requesterId: id})// {requesterId: id}
+          .then(possibleMeetings => {
+            possibleMeetings.forEach(mtg => {
+              let ids = JSON.stringify({
+                eventID: mtg.eventID
+              })
+              // get meetings on the same day to be displayed to user
+              let day1 = mtg.start.substring(0, 10)
+              let day2 = date.toISOString().substring(0, 10)
+              if (day1 === day2) {
+                buttons.push({
+                  'name': 'cancel',
+                  'text': mtg.subject + '@' + mtg.start,
+                  'type': 'button',
+                  'value': `${process.env.DOMAIN}/google/event?fields=${encodeURIComponent(ids)}&slackId=${slackId}&channel=${channel}&intent=cancel`
+                })
+              }
+            })
+            return buttons
+          }).then(buttons => {
+            console.log('cancel buttons', buttons, channel)
+            if (buttons.length === 0) {
+              callback({
+                'text': 'No Meetings scheduled on this date',
+                'channel': channel,
+                'token': token
+                })
+            } else {
+              callback({
+                'text': 'Select the meeting to cancel',
+                'channel': channel,
+                'token': token,
+                'attachments': [
+                  {
+                    'text': '',
+                    'fallback': "Shame... buttons aren't supported in this land",
+                    'callback_id': 'button_tutorial',
+                    'color': '#3AA3E3',
+                    'attachment_type': 'default',
+                    'actions': buttons
+                  }
+                ]
+              })
+            }
+          })
+      })
   }
 }
+app.post('/slack', function (req, res) {
+  let payload = JSON.parse(req.body.payload)
+  let {name, value} = payload.actions[0]
+  // console.log("name value", name, value);
+  // res.send("ok");
+  if (name === 'yes') {
+    axios(value.replace(/;/g, '&'))
+      .then(() => res.status(200).send('added to calendar'))
+      .catch((err) => console.log('error', err))
+  } else if (name === 'no') {
+    res.send('Okay. Action cancelled')
+  } else if (name === 'cancel') {
+    axios(value.replace(/;/g, '&'))
+      .then(() => res.status(200).send('meeting cancelled'))
+      .catch((err) => console.log('error', err))
+  }
+})
 
-app.get('/yesRoute', (req, res) => {
-  console.log('123456789', req.query.subject, req.query.date, req.query.channel)
+// app.get('/yesRoute', (req, res) => {
+//   console.log('123456789', req.query.subject, req.query.date, req.query.channel)
+//   web.chat.postMessage({
+//     'text': 'Added this to your calendar',
+//     'channel': req.query.channel,
+//     'token': token
+//   })
+//   res.redirect(`https://${slackTeam}.slack.com/messages/${req.query.channel}/`)
+// })
+
+// TODO: handles no button
+app.get('/noRoute', (req, res) => {
+  console.log('chose no', req.query.subject, req.query.date, req.query.channel)
   web.chat.postMessage({
-    'text': 'Added this to your calendar',
+    'text': 'Action cancelled',
     'channel': req.query.channel,
     'token': token
   })
+  // res.status(200).end();
   res.redirect(`https://${slackTeam}.slack.com/messages/${req.query.channel}/`)
 })
 
-/* GOOGLE API ROUTES */
+/* GOOGLE API OAUTH ROUTES */
 // GET route that redirects to google oatuh2 url
 app.get('/google/calendar', function (req, res) {
   console.log('get google calendar route')
@@ -324,39 +359,40 @@ app.get('/google/calendar', function (req, res) {
   User.findOne({
     slackId: slackId
   })
-  .exec()
-  .then((user) => {
-    if (!user && user !== BOT_ID) {
-    // create a new user in database
-      var newUser = new User({
-        slackId: slackId
-      })
-      newUser.save()
-        .then((user) => {
+    .exec()
+    .then((user) => {
+      if (!user && user !== BOT_ID) {
+        // create a new user in database
+        var newUser = new User({
+          slackId: slackId
+        })
+        newUser.save()
+          .then((user) => {
           // generate a url that asks permissions for Google+ and Google Calendar scopes
-          var url = oauth2Client.generateAuthUrl({
-          // 'online' (default) or 'offline' (gets refresh_token)
-            access_type: 'online',
-            // refresh_token only returned on the first authorization
-            scope: scopes,
-            state: encodeURIComponent(JSON.stringify({
-              auth_id: user._id
-            })),
-            prompt: 'consent'
+            var url = oauth2Client.generateAuthUrl({
+              // 'online' (default) or 'offline' (gets refresh_token)
+              // offline because we're server
+              access_type: 'offline',
+              // refresh_token only returned on the first authorization
+              scope: scopes,
+              state: encodeURIComponent(JSON.stringify({
+                auth_id: user._id
+              })),
+              prompt: 'consent'
+            })
+            res.redirect(url)
           })
-          res.redirect(url)
-        })
-        .catch((err) => {
-          console.log('error', err)
-          res.status(500).send('internal error')
-        })
+          .catch((err) => {
+            console.log('error', err)
+            res.status(500).send('internal error')
+          })
       } else {
         // check access token
         if (!user.access_token) {
           // user exists but failed to authenticate
           var url = oauth2Client.generateAuthUrl({
             // 'online' (default) or 'offline' (gets refresh_token)
-            access_type: 'online',
+            access_type: 'offline',
             // refresh_token only returned on the first authorization
             scope: scopes,
             state: encodeURIComponent(JSON.stringify({

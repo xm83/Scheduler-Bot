@@ -78,10 +78,6 @@ const meetingSchema = Schema({
   eventID: {
     type: String,
     required: true
-  },
-  calendarID: {
-    type: String,
-    required: true
   }
   // google calendar fields
 });
