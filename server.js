@@ -145,6 +145,7 @@ app.get('/google/event', function (req, res) {
           // })
           user.save()
             .then(() => res.redirect(`https://${slackTeam}.slack.com/messages/${req.query.channel}/`))
+            // better to do res.send("Action confirmed");
             .catch((err) => {
               console.log('error!!!', err)
               res.status(500).send('1 internal error')
